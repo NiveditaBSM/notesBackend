@@ -1,6 +1,10 @@
+require('dotenv').config();
 const express = require('express')
 const cors = require('cors')
 const morgan = require('morgan')
+
+const Note = require('./models/note')
+
 
 const app = express()
 // ------------------------------------------------------
@@ -21,38 +25,24 @@ morgan.token('body', (request, response) => {
 
 const unknownEndPoint = (request, response, next) => {
     response.status(404)
-    response.json({
+    response.send({
         error: "Content missing"
     })
 
 }
-// ------------------------------------------------------
-// Data stuff
-// ------------------------------------------------------
-let notes = [
-    {
-        id: "1",
-        content: "HTML is easy",
-        important: true
-    },
-    {
-        id: "2",
-        content: "Browser can execute only JavaScript",
-        important: false
-    },
-    {
-        id: "3",
-        content: "GET and POST are the most important methods of HTTP protocol",
-        important: true
+
+const errorHandler = (error, request, response, next) => {
+    console.log(error.name)
+
+    if (error.name === 'CastError') {
+        return response.status(400).send({ error: 'malformatted id' })
+    } else if (error.name == 'ValidationError') {
+        return response.status(400).json({ error: error.message })
     }
-]
-// ------------------------------------------------------
-//Helper functions
-// ------------------------------------------------------
-const getNextId = () => {
-    const maxId = notes.length > 0 ? Math.max(...notes.map(note => note.id)) : 0
-    return String(maxId + 1)
+
+    next(error)
 }
+
 
 // ------------------------------------------------------
 // Middleware
@@ -65,78 +55,69 @@ app.use(morgan(':method :url :status :res[content-length] - :response-time ms :b
 // ------------------------------------------------------
 // Roting and handling requests
 // ------------------------------------------------------
-app.get('/', (request, response) => {
-    response.send('<h2>Hello World, from home</h2>')
+
+app.get('/api/notes', (request, response, next) => {
+    Note.find({}).then(notes => {
+        response.json(notes)
+    }).catch(error => next(error))
 })
 
-app.get('/api/notes', (request, response) => {
-    response.json(notes)
-})
-
-app.post('/api/notes', (request, response) => {
-
-    const note = request.body
-
-    if (!note.content) {
-        response.status(400)
-        response.json({
-            error: "Content missing"
-        })
-    } else {
-        const temp = {
-            id: getNextId(),
-            content: note.content,
-            important: note.important || false,
+app.get('/api/notes/:id', (request, response, next) => {
+    Note.findById(request.params.id).then(note => {
+        if (note) {
+            response.json(note)
+        } else {
+            response.status(404).json({
+                error: "note not in the database"
+            })
         }
-
-        notes = notes.concat(temp)
-
-        response.json(temp)
-    }
+    }).catch(error => next(error))
 
 })
 
-app.put('/api/notes/:id', (request, response) => {
-    const id = request.params.id
+app.post('/api/notes', (request, response, next) => {
 
-    const note = notes.find(note => note.id === id)
-    if (note) {
-        const temp = request.body
+    const noteToPost = request.body
 
-        notes = notes.filter(note => note.id !== id)
-        notes = notes.concat(temp)
+    const note = new Note({
+        content: noteToPost.content,
+        important: noteToPost.important || false
+    })
 
-        response.json(temp)
+    note.save().then(savedNote => {
+        response.json(savedNote)
+    }).catch(error => next(error))
 
-    } else {
-        response.status(400)
-        response.json({
-            error: "Note not present"
+})
+
+app.put('/api/notes/:id', (request, response, next) => {
+
+    const { content, important } = request.body
+
+    Note.findByIdAndUpdate(request.params.id,
+        { content, important },
+        { new: true, runValidators: true, context: 'query' })
+        .then(updatedNote => {
+            response.json(updatedNote)
         })
-    }
+        .catch(error => next(error))
 
 })
 
-app.get('/api/notes/:id', (request, response) => {
-    const id = request.params.id
-    const note = notes.find(note => note.id === id)
-    if (note) {
-        response.json(note)
-    } else {
-        response.status(404).end()
-    }
-})
-
-app.delete('/api/notes/:id', (request, response) => {
-    const id = request.params.id
-    notes = notes.filter(note => note.id !== id)
-    response.status(204).end()
+app.delete('/api/notes/:id', (request, response, next) => {
+    console.log("in delete")
+    Note.findByIdAndDelete(request.params.id)
+        .then(result => {
+            response.status(204).end()
+        })
+        .catch(error => next(error))
 })
 
 app.use(unknownEndPoint)
+app.use(errorHandler)
 
 // ------------------------------------------------------
 // Starting the server
 // ------------------------------------------------------
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT
 app.listen(PORT, () => console.log(`Server is started on ${PORT}`))
