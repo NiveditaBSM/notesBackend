@@ -2,13 +2,15 @@ const mongoose = require('mongoose')
 
 const url = process.env.MONGODB_URI
 
-mongoose.connect(url)
-    .then(result => {
-        console.log('connected to MongoDB')
-    })
-    .catch(error => {
-        console.log('error connecting to MongoDB:', error.message)
-    })
+mongoose.connect(url, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    connectTimeoutMS: 30000
+}).then(result => {
+    console.log('connected to MongoDB')
+}).catch(error => {
+    console.log('error connecting to MongoDB:', error.message)
+})
 
 mongoose.set('strictQuery', false)
 

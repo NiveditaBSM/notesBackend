@@ -7,7 +7,7 @@ Content-Type: application/json
 }
 
 ###
-GET http://localhost:3001/api/notes
+GET http://localhost:3001/api/info
 
 ###
 PUT http://localhost:3001/api/notes/670f3e865439a3c8ee6baa8c
